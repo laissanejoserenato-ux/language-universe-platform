@@ -6,5 +6,14 @@
 </head>
 <body>
     <h1>Welcome to Language Universe English School</h1>
+    <button id="greetBtn">Greet from Backend</button>
+    <div id="result"></div>
+    <script>
+        document.getElementById('greetBtn').onclick = async function() {
+            const response = await fetch('/api/greet');
+            const data = await response.json();
+            document.getElementById('result').textContent = data.message;
+        }
+    </script>
 </body>
 </html>
