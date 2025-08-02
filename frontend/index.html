@@ -3,6 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <title>Language Universe English School</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 2em; background: #f6f8fa; }
+        h1 { color: #2a2a2a; }
+        #greetBtn { padding: 0.5em 1em; font-size: 1em; }
+        #result { margin-top: 1em; font-weight: bold; color: #00684A; }
+    </style>
 </head>
 <body>
     <h1>Welcome to Language Universe English School</h1>
@@ -10,9 +17,14 @@
     <div id="result"></div>
     <script>
         document.getElementById('greetBtn').onclick = async function() {
-            const response = await fetch('/api/greet');
-            const data = await response.json();
-            document.getElementById('result').textContent = data.message;
+            try {
+                const response = await fetch('/api/greet');
+                if (!response.ok) throw new Error('Network response was not ok');
+                const data = await response.json();
+                document.getElementById('result').textContent = data.message;
+            } catch (e) {
+                document.getElementById('result').textContent = "Could not connect to backend.";
+            }
         }
     </script>
 </body>
