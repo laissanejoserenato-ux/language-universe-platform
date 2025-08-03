@@ -1,19 +1,436 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Language Universe English School</title>
+  <meta charset="UTF-8">
+  <title>Language Universe English School</title>
+  <link rel="icon" href="favicon.ico">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1>Welcome to Language Universe English School</h1>
-    <button id="greetBtn">Greet from Backend</button>
-    <div id="result"></div>
-    <script>
-        document.getElementById('greetBtn').onclick = async function() {
-            const response = await fetch('/api/greet');
-            const data = await response.json();
-            document.getElementById('result').textContent = data.message;
+  <header>
+    <img src="logo.svg" alt="Language Universe English School Logo" style="width:90px;margin-bottom:10px;">
+    <h1>Language Universe English School</h1>
+    <p style="margin-bottom: 1em;">Welcome! Learn, grow, and succeed in English.</p>
+    <div id="loginRegisterButtons" class="flex-row">
+      <button class="btn" onclick="showLoginModal()">Log In</button>
+      <button class="btn" onclick="showRegisterModal()">Register</button>
+    </div>
+    <div id="loggedInBar" class="hidden">
+      <span id="welcomeUser"></span>
+      <button class="btn" onclick="logout()">Logout</button>
+      <button class="btn admin hidden" id="adminPanelBtn" onclick="showAdminPanel()">Admin Panel</button>
+    </div>
+  </header>
+  <div class="container" id="mainContent"></div>
+
+  <!-- Login Modal -->
+  <div id="loginModal" class="container hidden" style="position:fixed;top:12vh;left:0;right:0;z-index:10;">
+    <h2>Log In</h2>
+    <form id="loginForm" autocomplete="off">
+      <div class="input-group">
+        <label for="loginUsername">Username</label>
+        <input id="loginUsername" type="text" required>
+      </div>
+      <div class="input-group">
+        <label for="loginPassword">Password</label>
+        <input id="loginPassword" type="password" required>
+      </div>
+      <button class="btn" type="submit">Log In</button>
+      <button class="btn" type="button" onclick="closeLoginModal()">Cancel</button>
+    </form>
+    <div id="loginError" class="error"></div>
+  </div>
+
+  <!-- Register Modal -->
+  <div id="registerModal" class="container hidden" style="position:fixed;top:12vh;left:0;right:0;z-index:10;">
+    <h2>Register</h2>
+    <form id="registerForm" autocomplete="off">
+      <div class="input-group">
+        <label for="regUsername">Username</label>
+        <input id="regUsername" type="text" required>
+      </div>
+      <div class="input-group">
+        <label for="regPassword">Password</label>
+        <input id="regPassword" type="password" required>
+      </div>
+      <div class="input-group">
+        <label for="regPhone">Phone Number</label>
+        <input id="regPhone" type="text" required>
+      </div>
+      <button class="btn" type="submit">Register</button>
+      <button class="btn" type="button" onclick="closeRegisterModal()">Cancel</button>
+    </form>
+    <div id="registerError" class="error"></div>
+  </div>
+
+  <script>
+    const videoLinks = [
+      "https://www.youtube.com/embed/FWswzvV6yqQ",  // Level 1
+      "https://www.youtube.com/embed/8i4dH6yQv5A",  // Level 2
+      "https://www.youtube.com/embed/B6FIwz5TL4I",  // Level 3
+      "https://www.youtube.com/embed/fkRkVvJQwRY"   // Level 4
+    ];
+    const worksheetLinks = [
+      "worksheets/level1.pdf",
+      "worksheets/level2.pdf",
+      "worksheets/level3.pdf",
+      "worksheets/level4.pdf"
+    ];
+
+    let token = null;
+    let currentUser = null;
+    let isInscribed = false;
+    let isAdmin = false;
+    let inscriptionStatus = null;
+    let paymentProofStatus = null;
+
+    function showLoginModal() {
+      document.getElementById('loginModal').classList.remove('hidden');
+    }
+    function closeLoginModal() {
+      document.getElementById('loginModal').classList.add('hidden');
+    }
+    function showRegisterModal() {
+      document.getElementById('registerModal').classList.remove('hidden');
+    }
+    function closeRegisterModal() {
+      document.getElementById('registerModal').classList.add('hidden');
+    }
+
+    document.getElementById('loginForm').onsubmit = async function(e) {
+      e.preventDefault();
+      const username = document.getElementById('loginUsername').value;
+      const password = document.getElementById('loginPassword').value;
+      try {
+        const res = await fetch('/api/login', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        const data = await res.json();
+        if (data.token) {
+          token = data.token;
+          currentUser = username;
+          isAdmin = parseJwt(token).isAdmin;
+          closeLoginModal();
+          await postLogin();
+        } else {
+          document.getElementById('loginError').textContent = data.error || "Login failed.";
         }
-    </script>
+      } catch (err) {
+        document.getElementById('loginError').textContent = "Error connecting to server.";
+      }
+    };
+
+    document.getElementById('registerForm').onsubmit = async function(e) {
+      e.preventDefault();
+      const username = document.getElementById('regUsername').value;
+      const password = document.getElementById('regPassword').value;
+      const phone = document.getElementById('regPhone').value;
+      try {
+        const res = await fetch('/api/register', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password, phone })
+        });
+        const data = await res.json();
+        if (data.token) {
+          token = data.token;
+          currentUser = username;
+          isAdmin = parseJwt(token).isAdmin;
+          closeRegisterModal();
+          await postLogin();
+        } else {
+          document.getElementById('registerError').textContent = data.error || "Registration failed.";
+        }
+      } catch (err) {
+        document.getElementById('registerError').textContent = "Error connecting to server.";
+      }
+    };
+
+    function parseJwt(token) {
+      try {
+        return JSON.parse(atob(token.split('.')[1]));
+      } catch { return {}; }
+    }
+
+    async function postLogin() {
+      document.getElementById('mainContent').classList.remove('hidden');
+      document.getElementById('loginRegisterButtons').classList.add('hidden');
+      document.getElementById('loggedInBar').classList.remove('hidden');
+      document.getElementById('welcomeUser').textContent = `Welcome, ${currentUser}!`;
+      if (isAdmin) document.getElementById('adminPanelBtn').classList.remove('hidden');
+      else document.getElementById('adminPanelBtn').classList.add('hidden');
+      await loadStatus();
+      showMainContent();
+    }
+
+    function logout() {
+      token = null; currentUser = null; isAdmin = false; isInscribed = false;
+      inscriptionStatus = null; paymentProofStatus = null;
+      document.getElementById('mainContent').innerHTML = "";
+      document.getElementById('mainContent').classList.add('hidden');
+      document.getElementById('loginRegisterButtons').classList.remove('hidden');
+      document.getElementById('loggedInBar').classList.add('hidden');
+      document.getElementById('adminPanelBtn').classList.add('hidden');
+    }
+
+    async function loadStatus() {
+      try {
+        const i = await fetch('/api/my-inscription', { headers: authHeader() });
+        const inscription = (await i.json()).inscription;
+        isInscribed = inscription && inscription.status === 'pending';
+        inscriptionStatus = inscription ? inscription.status : null;
+      } catch {}
+      try {
+        const p = await fetch('/api/my-payment-proof', { headers: authHeader() });
+        const proof = (await p.json()).proof;
+        paymentProofStatus = proof ? proof.status : null;
+      } catch {}
+    }
+
+    function authHeader() {
+      return token ? { 'Authorization': 'Bearer ' + token } : {};
+    }
+
+    function showMainContent() {
+      let booksHTML = `
+        <div class="section-title">Books on Sale</div>
+        <div class="book-list">
+          <div class="book-item">Level 1 Book <span>300 MZN</span></div>
+          <div class="book-item">Level 2 Book <span>350 MZN</span></div>
+          <div class="book-item">Level 3 Book <span>400 MZN</span></div>
+          <div class="book-item">Level 4 Book <span>450 MZN</span></div>
+        </div>`;
+      let inscriptionHTML = `
+        <div class="section-title">Inscriptions</div>
+        <div class="inscription-list">
+          <div class="inscription-item">Online: <span>Inscription 200 MZN, Monthly 1000 MZN</span>
+            <button class="btn" onclick="showInscriptionForm('online')">Inscribe Online</button></div>
+          <div class="inscription-item">In Person: <span>Inscription 200 MZN, Monthly 800 MZN</span>
+            <button class="btn" onclick="showInscriptionForm('inperson')">Inscribe In Person</button></div>
+        </div>`;
+      let paymentHTML = `
+        <div class="section-title">Payment Options</div>
+        <ul class="payment-list">
+          <li><b>e-mola:</b> Send to <span style="color:#176ab6;">+258 87 905 6643</span></li>
+          <li><b>mpesa:</b> Send to <span style="color:#176ab6;">+258 85 056 6430</span></li>
+        </ul>
+        <div class="upload-group">
+          <label for="paymentProof">Send Payment Confirmation (Picture):</label>
+          <input type="file" id="paymentProof" accept="image/*">
+          <button class="btn" onclick="sendPaymentProof()">Send Confirmation</button>
+          <div id="confirmationStatus">${paymentProofStatus ? `<span class="${paymentProofStatus==='confirmed'?'success':'confirmation'}">${paymentProofStatus}</span>` : ''}</div>
+        </div>`;
+      let materialsHTML = `
+        <div class="section-title">Online Materials</div>
+        <div class="video-section">
+          <p><b>Online Videos:</b></p>
+          <ul class="video-list">
+            <li><a href="#" id="video1" class="${!canAccessMaterials() ? 'disabled' : ''}" onclick="accessVideo(1)">Level 1</a></li>
+            <li><a href="#" id="video2" class="${!canAccessMaterials() ? 'disabled' : ''}" onclick="accessVideo(2)">Level 2</a></li>
+            <li><a href="#" id="video3" class="${!canAccessMaterials() ? 'disabled' : ''}" onclick="accessVideo(3)">Level 3</a></li>
+            <li><a href="#" id="video4" class="${!canAccessMaterials() ? 'disabled' : ''}" onclick="accessVideo(4)">Level 4</a></li>
+          </ul>
+        </div>
+        <div class="worksheet-section">
+          <p><b>Receive Worksheets:</b></p>
+          <button class="btn" id="requestWorksheetsBtn" ${!canAccessMaterials() ? 'disabled' : ''} onclick="requestWorksheets()">Request Worksheets</button>
+        </div>`;
+      let contactHTML = `
+        <div class="contact-info">
+          <button class="btn" onclick="contactUs()">Contact Us</button>
+          <button class="btn whatsapp-btn" onclick="contactWhatsApp()">WhatsApp</button>
+          <div style="margin-top:0.7em;">
+            Phone: <b>+258 87 905 6643</b>
+          </div>
+        </div>`;
+      let statusHTML = '';
+      if (inscriptionStatus) statusHTML = `<div class="confirmation">Inscription status: ${inscriptionStatus}</div>`;
+      document.getElementById('mainContent').innerHTML = booksHTML + inscriptionHTML + paymentHTML + materialsHTML + contactHTML + statusHTML;
+      enableOnlineMaterials();
+    }
+
+    function canAccessMaterials() {
+      return isInscribed && paymentProofStatus === 'confirmed';
+    }
+
+    function showInscriptionForm(type) {
+      let inscriptionType = (type === 'online') ? 'Online' : 'In Person';
+      document.getElementById('mainContent').innerHTML = `
+        <h2>${inscriptionType} Inscription Form</h2>
+        <form id="inscriptionForm">
+          <div class="input-group">
+            <label>First Name</label>
+            <input type="text" required id="firstName">
+          </div>
+          <div class="input-group">
+            <label>Surname</label>
+            <input type="text" required id="surname">
+          </div>
+          <div class="input-group">
+            <label>Age</label>
+            <input type="number" min="3" required id="age">
+          </div>
+          <div class="input-group">
+            <label>Level Interested In</label>
+            <select id="levelInterested">
+              <option value="1">Level 1</option>
+              <option value="2">Level 2</option>
+              <option value="3">Level 3</option>
+              <option value="4">Level 4</option>
+            </select>
+          </div>
+          <div class="input-group">
+            <label>Phone Number</label>
+            <input type="text" required id="studentPhone">
+          </div>
+          <button class="btn" type="submit">Submit Inscription</button>
+          <button class="btn" type="button" onclick="showMainContent()">Cancel</button>
+        </form>
+        <div id="inscriptionStatus"></div>
+      `;
+      document.getElementById('inscriptionForm').onsubmit = async function(e) {
+        e.preventDefault();
+        let firstName = document.getElementById('firstName').value;
+        let surname = document.getElementById('surname').value;
+        let age = document.getElementById('age').value;
+        let level = document.getElementById('levelInterested').value;
+        let phone = document.getElementById('studentPhone').value;
+        try {
+          const res = await fetch('/api/inscription', {
+            method: 'POST',
+            headers: { ...authHeader(), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ firstName, surname, age, level, phone, type: inscriptionType.toLowerCase() })
+          });
+          const data = await res.json();
+          if (data.success) {
+            document.getElementById('inscriptionStatus').innerHTML = `<div class="confirmation">Inscription received! You can now submit your payment proof.</div>`;
+            await loadStatus();
+            setTimeout(showMainContent, 2000);
+          } else {
+            document.getElementById('inscriptionStatus').innerHTML = `<span class="error">${data.error || "Inscription failed."}</span>`;
+          }
+        } catch {
+          document.getElementById('inscriptionStatus').innerHTML = `<span class="error">Error connecting to server.</span>`;
+        }
+      };
+    }
+
+    async function sendPaymentProof() {
+      const fileInput = document.getElementById('paymentProof');
+      if(fileInput.files.length === 0) {
+        document.getElementById('confirmationStatus').textContent = "Please select a picture.";
+        return;
+      }
+      let formData = new FormData();
+      formData.append('proof', fileInput.files[0]);
+      try {
+        const res = await fetch('/api/payment-proof', {
+          method: 'POST',
+          headers: authHeader(),
+          body: formData
+        });
+        const data = await res.json();
+        if (data.success) {
+          document.getElementById('confirmationStatus').innerHTML = `<div class="confirmation">Confirmation sent! Await admin response.</div>`;
+          await loadStatus();
+          setTimeout(showMainContent, 2000);
+        } else {
+          document.getElementById('confirmationStatus').innerHTML = `<span class="error">${data.error || "Upload failed."}</span>`;
+        }
+      } catch {
+        document.getElementById('confirmationStatus').innerHTML = `<span class="error">Error uploading file.</span>`;
+      }
+    }
+
+    function contactUs() {
+      alert("Call us at +258 87 905 6643");
+    }
+    function contactWhatsApp() {
+      window.open("https://wa.me/258879056643", "_blank");
+    }
+
+    function accessVideo(level) {
+      if(!canAccessMaterials()) {
+        alert("You must be inscribed and payment confirmed to access videos.");
+        return;
+      }
+      const url = videoLinks[level-1];
+      document.getElementById('mainContent').innerHTML = `
+        <h2>Level ${level} Video</h2>
+        <iframe width="100%" height="315" src="${url}" frameborder="0" allowfullscreen></iframe>
+        <button class="btn" onclick="showMainContent()">Back</button>
+      `;
+    }
+
+    function requestWorksheets() {
+      if(!canAccessMaterials()) {
+        alert("You must be inscribed and payment confirmed to receive worksheets.");
+        return;
+      }
+      let html = `<h2>Download Worksheets</h2><ul>`;
+      worksheetLinks.forEach((link, idx) => {
+        html += `<li><a href="${link}" target="_blank">Level ${idx+1} Worksheet</a></li>`;
+      });
+      html += `</ul><button class="btn" onclick="showMainContent()">Back</button>`;
+      document.getElementById('mainContent').innerHTML = html;
+    }
+
+    function enableOnlineMaterials() {
+      if(canAccessMaterials()) {
+        ["video1","video2","video3","video4"].forEach(id=>{
+          let el=document.getElementById(id); if(el) el.classList.remove("disabled");
+        });
+        let btn = document.getElementById("requestWorksheetsBtn");
+        if(btn) btn.disabled = false;
+      }
+    }
+
+    async function showAdminPanel() {
+      document.getElementById('mainContent').innerHTML = '<h2>Admin Panel</h2><div id="adminTables"></div>';
+      let adminHTML = '';
+      try {
+        const res = await fetch('/api/admin/inscriptions', { headers: authHeader() });
+        const data = await res.json();
+        adminHTML += '<h3>Inscriptions</h3><table class="admin-table"><tr><th>User</th><th>Name</th><th>Phone</th><th>Type</th><th>Status</th></tr>';
+        data.inscriptions.forEach(i => {
+          adminHTML += `<tr><td>${i.user.username}</td><td>${i.firstName} ${i.surname}</td><td>${i.phone}</td><td>${i.type}</td><td>${i.status}</td></tr>`;
+        });
+        adminHTML += '</table>';
+      } catch {}
+      try {
+        const res = await fetch('/api/admin/payment-proofs', { headers: authHeader() });
+        const data = await res.json();
+        adminHTML += '<h3>Payment Proofs</h3><table class="admin-table"><tr><th>User</th><th>File</th><th>Status</th><th>Action</th></tr>';
+        data.proofs.forEach(p => {
+          adminHTML += `<tr>
+            <td>${p.user.username}</td>
+            <td><a href="/api/uploads/${p.filename}" target="_blank">${p.originalname}</a></td>
+            <td>${p.status}</td>
+            <td>${p.status === 'pending' ? `<button class="btn" onclick="approveProof('${p._id}')">Approve</button>` : ''}</td>
+          </tr>`;
+        });
+        adminHTML += '</table>';
+      } catch {}
+      document.getElementById('adminTables').innerHTML = adminHTML;
+    }
+
+    async function approveProof(id) {
+      try {
+        const res = await fetch(`/api/admin/approve-payment/${id}`, {
+          method: 'POST', headers: authHeader()
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert('Payment proof approved!');
+          showAdminPanel();
+        } else {
+          alert('Approval failed.');
+        }
+      } catch {
+        alert('Error approving payment.');
+      }
+    }
+  </script>
 </body>
 </html>
